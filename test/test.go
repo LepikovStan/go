@@ -8,15 +8,16 @@ import (
 	"os"
 	"strings"
 	"time"
+	"bufio"
 )
 
-func getSitesList() [5]string {
-	sitesList := [5]string{
+func getSitesList() [2]string {
+	sitesList := [2]string{
 		"http://donothingfor2minutes.com/",
 		"http://stenadobra.ru/",
-		"http://humandescent.com",
-		"http://thefirstworldwidewebsitewerenothinghappens.com",
-		"http://button.dekel.ru",
+		// "http://humandescent.com",
+		// "http://thefirstworldwidewebsitewerenothinghappens.com",
+		// "http://button.dekel.ru",
 	}
 	return sitesList
 }
@@ -35,14 +36,14 @@ func getFileName(rawURL string) string {
 	return fileName
 }
 
-func createFile(filePath string) *os.File {
+func createFile(filePath string) (*os.File, string) {
 	filePath = "./downloaded/" + filePath
 	file, err := os.Create(filePath)
 	if err != nil {
 		fmt.Println(err)
 		panic(err)
 	}
-	return file
+	return file, filePath
 }
 
 func getConnection(rawURL string) *http.Response {
@@ -66,7 +67,7 @@ func downloadFileSync(rawURL string) {
 	fmt.Println("\n\n")
 	fmt.Println(fmt.Sprintf("Start to download %s", rawURL))
 	fileName := getFileName(rawURL)
-	file := createFile(fileName)
+	file, _ := createFile(fileName)
 	defer file.Close()
 	resp := getConnection(rawURL)
 
@@ -81,38 +82,53 @@ func downloadFileSync(rawURL string) {
 	fmt.Printf("%s with %v bytes downloaded, time=%s", fileName, size, end.Sub(start))
 }
 
+func readFile(filePath string) {
+    file, _ := os.Open(filePath)
+	f := bufio.NewReader(file)
+    for {
+        read_line, _ := f.ReadString('\n')
+        fmt.Print(read_line)
+    }
+}
+
 func downloadFile(rawURL string, c chan string) {
 	start := time.Now()
 	fmt.Println("\n\n")
 	fmt.Println(fmt.Sprintf("Start to download %s", rawURL))
 	fileName := getFileName(rawURL)
-	file := createFile(fileName)
+	file, filePath := createFile(fileName)
 	defer file.Close()
 	resp := getConnection(rawURL)
-
-	fmt.Println(resp.Status)
 	defer resp.Body.Close()
 
+	// readFile(resp.Body);
 	size, err := io.Copy(file, resp.Body)
 	if err != nil {
 		panic(err)
 	}
 	end := time.Now()
-	result := fmt.Sprintf("%s with %v bytes downloaded, time=%s", fileName, size, end.Sub(start))
+	fmt.Println(fmt.Sprintf("%s %s with %v bytes downloaded, time=%s", resp.Status, fileName, size, end.Sub(start)))
 
-	c <- result
+	c <- filePath
 }
 
 func main() {
 	fmt.Println("Downloading file...")
 
 	start := time.Now()
-	c := make(chan string)
 	sitesList := getSitesList()
+	c := make(chan string, len(sitesList))
 	for _, rawURL := range(sitesList) {
 		// downloadFileSync(rawURL)
 		go downloadFile(rawURL, c)
-		fmt.Println(fmt.Sprintf("\n %s", <- c))
+		// filePath := <- c
+		// readFile(filePath);
+		fmt.Println("channel length", len(c))
+	}
+
+	// close(c)
+	for i := range c {
+		fmt.Println(fmt.Sprintf("%s done", i))
 	}
 
 	end := time.Now()
