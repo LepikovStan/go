@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"time"
 	"strconv"
-	"github.com/PuerkitoBio/goquery"
+	"github.com/LepikovStan/ScrapeLinks"
 )
 
 var counter int;
@@ -37,60 +36,22 @@ func getSitesList() [21]string {
 	return sitesList
 }
 
-type Refs struct {
-	title string
-	href string
-	url string
-}
-
-type R struct {
-	url string
-	links []Refs
-}
-
-func ScrapeLinks(url string, c chan R) {
-	var links []Refs
-
- 	doc, err := goquery.NewDocument(url)
-
- 	if err != nil {
- 		panic(err)
- 	}
-
- 	doc.Find("a").Each(func(i int, s *goquery.Selection) {
- 		Title := strings.TrimSpace(s.Text())
-		Href, _ := s.Attr("href")
-		ref := Refs{
-			title: Title,
-			href: Href,
-			url: url,
-	    }
-		links = append(links, ref)
- 	})
-	res := R{
-		url: url,
-		links: links,
-	}
-
-	c <- res
- }
-
 func main() {
 	fmt.Println("Start...")
 
 	start := time.Now()
 	sitesList := getSitesList()
-	result := make(map[string][]Refs)
+	result := make(map[string][]ScrapeLinks.Ref)
 	counter = 1;
 	chanLength := len(sitesList)
-	c := make(chan R, chanLength)
+	c := make(chan ScrapeLinks.RefsList, chanLength)
 
 	for _, rawURL := range(sitesList) {
-		go ScrapeLinks(rawURL, c)
+		go ScrapeLinks.Run(rawURL, c)
 	}
 
 	for ref := range(c) {
-		result[ref.url] = ref.links
+		result[ref.Url] = ref.Links
 		if (chanLength <= 1) {
 			close(c)
 		}
@@ -100,7 +61,7 @@ func main() {
 	for url, links := range(result) {
 		fmt.Println(fmt.Sprintf("\n%s) %s:\n\n   links:\n", strconv.Itoa(counter), url))
 		for _, link := range(links) {
-			fmt.Println(fmt.Sprintf("      Href: %s, Title: %s", link.href, link.title))
+			fmt.Println(fmt.Sprintf("      Href: %s, Title: %s", link.Href, link.Title))
 		}
 		counter = counter + 1
 	}
