@@ -2,133 +2,107 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"os"
 	"strings"
 	"time"
-	"bufio"
+	"strconv"
+	"github.com/PuerkitoBio/goquery"
 )
 
-func getSitesList() [2]string {
-	sitesList := [2]string{
+var counter int;
+
+func getSitesList() [21]string {
+	sitesList := [21]string{
 		"http://donothingfor2minutes.com/",
 		"http://stenadobra.ru/",
-		// "http://humandescent.com",
-		// "http://thefirstworldwidewebsitewerenothinghappens.com",
-		// "http://button.dekel.ru",
+		"http://humandescent.com",
+		"http://thefirstworldwidewebsitewerenothinghappens.com",
+		"http://button.dekel.ru",
+		"http://www.randominio.com/",
+		"http://thenicestplaceontheinter.net/",
+		"http://www.catsthatlooklikehitler.com/",
+		"http://www.thefirstworldwidewebsitewerenothinghappens.com/",
+		"http://www.donothingfor2minutes.com/",
+		"http://www.howmanypeopleareinspacerightnow.com/",
+		"http://www.humanclock.com/",
+		"http://fucking-great-advice.ru/",
+		"http://www.cesmes.fi/pallo.swf",
+		"http://button.dekel.ru/",
+		"http://www.rainfor.me/",
+		"http://loudportraits.com/",
+		"http://sprosimamu.ru/",
+		"http://www.bandofbridges.com/",
+		"http://www.catsboobs.com/",
+		"http://www.incredibox.com/",
 	}
 	return sitesList
 }
 
-func getFileName(rawURL string) string {
-	fileURL, err := url.Parse(rawURL)
-
-	if err != nil {
-		panic(err)
-	}
-
-	host := fileURL.Host
-	segments := strings.Split(host, ".")
-	domain := segments[0]
-	fileName := domain + ".html"
-	return fileName
+type Refs struct {
+	title string
+	href string
+	url string
 }
 
-func createFile(filePath string) (*os.File, string) {
-	filePath = "./downloaded/" + filePath
-	file, err := os.Create(filePath)
-	if err != nil {
-		fmt.Println(err)
-		panic(err)
-	}
-	return file, filePath
+type R struct {
+	url string
+	links []Refs
 }
 
-func getConnection(rawURL string) *http.Response {
-	connect := http.Client{
-		CheckRedirect: func(r *http.Request, via []*http.Request) error {
-			r.URL.Opaque = r.URL.Path
-			return nil
-		},
+func ScrapeLinks(url string, c chan R) {
+	var links []Refs
+
+ 	doc, err := goquery.NewDocument(url)
+
+ 	if err != nil {
+ 		panic(err)
+ 	}
+
+ 	doc.Find("a").Each(func(i int, s *goquery.Selection) {
+ 		Title := strings.TrimSpace(s.Text())
+		Href, _ := s.Attr("href")
+		ref := Refs{
+			title: Title,
+			href: Href,
+			url: url,
+	    }
+		links = append(links, ref)
+ 	})
+	res := R{
+		url: url,
+		links: links,
 	}
-	resp, err := connect.Get(rawURL) // add a filter to check redirect
 
-	if err != nil {
-		fmt.Println(err)
-		panic(err)
-	}
-	return resp
-}
-
-func downloadFileSync(rawURL string) {
-	start := time.Now()
-	fmt.Println("\n\n")
-	fmt.Println(fmt.Sprintf("Start to download %s", rawURL))
-	fileName := getFileName(rawURL)
-	file, _ := createFile(fileName)
-	defer file.Close()
-	resp := getConnection(rawURL)
-
-	fmt.Println(resp.Status)
-	defer resp.Body.Close()
-
-	size, err := io.Copy(file, resp.Body)
-	if err != nil {
-		panic(err)
-	}
-	end := time.Now()
-	fmt.Printf("%s with %v bytes downloaded, time=%s", fileName, size, end.Sub(start))
-}
-
-func readFile(filePath string) {
-    file, _ := os.Open(filePath)
-	f := bufio.NewReader(file)
-    for {
-        read_line, _ := f.ReadString('\n')
-        fmt.Print(read_line)
-    }
-}
-
-func downloadFile(rawURL string, c chan string) {
-	start := time.Now()
-	fmt.Println("\n\n")
-	fmt.Println(fmt.Sprintf("Start to download %s", rawURL))
-	fileName := getFileName(rawURL)
-	file, filePath := createFile(fileName)
-	defer file.Close()
-	resp := getConnection(rawURL)
-	defer resp.Body.Close()
-
-	// readFile(resp.Body);
-	size, err := io.Copy(file, resp.Body)
-	if err != nil {
-		panic(err)
-	}
-	end := time.Now()
-	fmt.Println(fmt.Sprintf("%s %s with %v bytes downloaded, time=%s", resp.Status, fileName, size, end.Sub(start)))
-
-	c <- filePath
-}
+	c <- res
+ }
 
 func main() {
-	fmt.Println("Downloading file...")
+	fmt.Println("Start...")
 
 	start := time.Now()
 	sitesList := getSitesList()
-	c := make(chan string, len(sitesList))
+	result := make(map[string][]Refs)
+	counter = 1;
+	chanLength := len(sitesList)
+	c := make(chan R, chanLength)
+
 	for _, rawURL := range(sitesList) {
-		// downloadFileSync(rawURL)
-		go downloadFile(rawURL, c)
-		// filePath := <- c
-		// readFile(filePath);
-		fmt.Println("channel length", len(c))
+		go ScrapeLinks(rawURL, c)
 	}
 
-	// close(c)
-	for i := range c {
-		fmt.Println(fmt.Sprintf("%s done", i))
+	for ref := range(c) {
+		result[ref.url] = ref.links
+		if (chanLength <= 1) {
+			close(c)
+		}
+		chanLength = chanLength - 1
+	}
+
+	for url, links := range(result) {
+		fmt.Println(fmt.Sprintf("\n%s) %s:\n\n   links:\n", strconv.Itoa(counter), url))
+		for _, link := range(links) {
+			fmt.Println(fmt.Sprintf("      Href: %s, Title: %s", link.href, link.title))
+		}
+		counter = counter + 1
 	}
 
 	end := time.Now()
