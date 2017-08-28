@@ -3,11 +3,8 @@ package main
 import (
 	"fmt"
 	"time"
-	"strconv"
 	"github.com/LepikovStan/ScrapeLinks"
 )
-
-var counter int;
 
 func getSitesList() [21]string {
 	sitesList := [21]string{
@@ -38,11 +35,9 @@ func getSitesList() [21]string {
 
 func main() {
 	fmt.Println("Start...")
-
 	start := time.Now()
+
 	sitesList := getSitesList()
-	result := make(map[string][]ScrapeLinks.Ref)
-	counter = 1;
 	chanLength := len(sitesList)
 	c := make(chan ScrapeLinks.RefsList, chanLength)
 
@@ -50,23 +45,10 @@ func main() {
 		go ScrapeLinks.Run(rawURL, c)
 	}
 
-	for ref := range(c) {
-		result[ref.Url] = ref.Links
-		if (chanLength <= 1) {
-			close(c)
-		}
-		chanLength = chanLength - 1
-	}
-
-	for url, links := range(result) {
-		fmt.Println(fmt.Sprintf("\n%s) %s:\n\n   links:\n", strconv.Itoa(counter), url))
-		for _, link := range(links) {
-			fmt.Println(fmt.Sprintf("      Href: %s, Title: %s", link.Href, link.Title))
-		}
-		counter = counter + 1
-	}
+	result := ScrapeLinks.Format(c, chanLength);
+	ScrapeLinks.Print(result);
 
 	end := time.Now()
-	fmt.Println('\n')
+	fmt.Println("\n")
 	fmt.Println(end.Sub(start))
 }
